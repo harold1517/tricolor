@@ -63,6 +63,13 @@ export default async (req: Request, _context: Context) => {
 
   const p = await getPlace(String(body?.id ?? ""));
   if (!p) return json({ ok: false, reason: "not_found" }, 404);
+  if (action === "move") {
+    const lat = Number(body?.lat), lng = Number(body?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 85 || Math.abs(lng) > 180) return json({ ok: false, reason: "pin" }, 400);
+    p.lat = Math.round(lat * 1e6) / 1e6; p.lng = Math.round(lng * 1e6) / 1e6;
+    await savePlace(p);
+    return json({ ok: true });
+  }
   if (action === "hide") { p.hidden = true; await savePlace(p); return json({ ok: true }); }
   if (action === "show") { p.hidden = false; p.reports = 0; await savePlace(p); return json({ ok: true }); }
   if (action === "delete") { await places().delete(p.id); return json({ ok: true }); }

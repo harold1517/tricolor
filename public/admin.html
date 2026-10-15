@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root { --ink: #0E1A3A; --muted: #5A6480; --line: #E6E1D3; --paper: #FFFBF1; --blue: #00247D; --red: #CF142B; --yellow: #FFCC00; }
   * { box-sizing: border-box; }
@@ -38,6 +39,9 @@
   .pill { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 700; }
   .ok { background: #DDF3E4; color: #146C3A; } .warn { background: #FFE0E3; color: #8E0F1F; } .off { background: #ECECEC; color: #555; }
   .err { color: var(--red); font-weight: 600; }
+  .modal { position: fixed; inset: 0; z-index: 1000; background: rgba(14,26,58,.5); display: grid; place-items: center; padding: 12px; }
+  .modal .box { background: #fff; border-radius: 16px; width: 100%; max-width: 720px; padding: 16px; display: grid; gap: 10px; }
+  #moveMap { height: 60vh; min-height: 320px; border-radius: 12px; }
 </style>
 </head>
 <body>
@@ -74,6 +78,16 @@
     </div>
   </section>
 </main>
+<div class="modal" id="moveModal" hidden>
+  <div class="box">
+    <b id="moveTitle">Mover pin</b>
+    <p class="muted" style="margin:0">Arrastra el pin rojo al lugar correcto, o toca el mapa donde queda. Puedes buscar una dirección o un sitio conocido.</p>
+    <form class="row" id="moveSearch"><input id="moveQ" placeholder="Ej.: Container Park, Cali" style="flex:1;min-width:200px"><button class="ghost">Buscar</button></form>
+    <div id="moveMap"></div>
+    <div class="row" style="justify-content:flex-end"><button class="ghost" id="moveCancel" type="button">Cancelar</button><button id="moveSave" type="button">Guardar aquí</button></div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 "use strict";
 try { localStorage.setItem("tricolor.notrack", "1"); } catch (e) {}
@@ -126,13 +140,14 @@ function drawRows() {
     <td>👍 ${p.confirms} · ⚠️ ${p.reports}</td>
     <td>${p.hidden ? '<span class="pill off">Oculto</span>' : p.auto ? '<span class="pill warn">Oculto por reportes</span>' : '<span class="pill ok">Visible</span>'}</td>
     <td>${new Date(p.createdAt).toLocaleDateString("es-CO")}</td>
-    <td class="row">${p.hidden || p.auto ? `<button class="sm ghost" data-a="show" data-id="${esc(p.id)}">Mostrar</button>` : `<button class="sm ghost" data-a="hide" data-id="${esc(p.id)}">Ocultar</button>`}<button class="sm danger" data-a="delete" data-id="${esc(p.id)}">Borrar</button></td>
+    <td class="row"><button class="sm ghost" data-a="move" data-id="${esc(p.id)}">Mover pin</button>${p.hidden || p.auto ? `<button class="sm ghost" data-a="show" data-id="${esc(p.id)}">Mostrar</button>` : `<button class="sm ghost" data-a="hide" data-id="${esc(p.id)}">Ocultar</button>`}<button class="sm danger" data-a="delete" data-id="${esc(p.id)}">Borrar</button></td>
   </tr>`).join("") || `<tr><td colspan="6" class="muted">No hay lugares para mostrar.</td></tr>`;
 }
 $("show").addEventListener("change", drawRows);
 $("find").addEventListener("input", drawRows);
 $("rows").addEventListener("click", async ev => {
   const b = ev.target.closest("button[data-a]"); if (!b) return;
+  if (b.dataset.a === "move") { openMove(PLACES.find(p => p.id === b.dataset.id)); return; }
   if (b.dataset.a === "delete" && !confirm("¿Borrar este lugar para siempre?")) return;
   b.disabled = true;
   try { await call({ action: b.dataset.a, id: b.dataset.id }); await load(); } catch (e) { alert("No se pudo: " + e.message); b.disabled = false; }
@@ -164,6 +179,44 @@ $("importBtn").addEventListener("click", async () => {
     await load();
   } catch (e) { $("importMsg").textContent = "No se pudo cargar: " + e.message; }
   $("importBtn").disabled = false;
+});
+
+/* ---------- Mover pin ---------- */
+let mMap = null, mMarker = null, mPlace = null;
+function openMove(p) {
+  if (!p) return;
+  mPlace = p;
+  $("moveTitle").textContent = "Mover pin: " + p.name;
+  $("moveQ").value = [p.address, p.city].filter(Boolean).join(", ");
+  $("moveModal").hidden = false;
+  if (!mMap) {
+    mMap = L.map("moveMap");
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, subdomains: "abc", attribution: "&copy; OpenStreetMap" }).addTo(mMap);
+    const icon = L.divIcon({ className: "", html: '<div style="width:28px;height:28px;background:#d62828;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>', iconSize: [28, 28], iconAnchor: [14, 34] });
+    mMarker = L.marker([0, 0], { draggable: true, icon }).addTo(mMap);
+    mMap.on("click", e => mMarker.setLatLng(e.latlng));
+  }
+  mMap.setView([p.lat, p.lng], 17);
+  mMarker.setLatLng([p.lat, p.lng]);
+  setTimeout(() => mMap.invalidateSize(), 50);
+}
+$("moveCancel").addEventListener("click", () => { $("moveModal").hidden = true; });
+$("moveSearch").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const q = $("moveQ").value.trim(); if (!q) return;
+  try {
+    const r = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(q) + (mPlace && mPlace.country ? "&countrycodes=" + mPlace.country.toLowerCase() : ""));
+    const d = await r.json();
+    if (d[0]) { mMap.setView([+d[0].lat, +d[0].lon], 17); mMarker.setLatLng([+d[0].lat, +d[0].lon]); }
+    else alert("No lo encontramos. Mueve el mapa a mano y arrastra el pin.");
+  } catch (e) { alert("No se pudo buscar."); }
+});
+$("moveSave").addEventListener("click", async () => {
+  const ll = mMarker.getLatLng();
+  $("moveSave").disabled = true;
+  try { await call({ action: "move", id: mPlace.id, lat: ll.lat, lng: ll.lng }); $("moveModal").hidden = true; await load(); }
+  catch (e) { alert("No se pudo guardar: " + e.message); }
+  $("moveSave").disabled = false;
 });
 
 if (KEY) load().catch(() => { KEY = ""; });
