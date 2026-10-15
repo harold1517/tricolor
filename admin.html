@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Tricolor · Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #0E1A3A; --muted: #5A6480; --line: #E6E1D3; --paper: #FFFBF1; --blue: #00247D; --red: #CF142B; --yellow: #FFCC00; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; font: 400 15px/1.45 "Figtree", system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { font: 800 26px/1.1 "Archivo", sans-serif; margin: 0 0 4px; letter-spacing: -.02em; }
+  h2 { font-size: 17px; margin: 28px 0 10px; }
+  .muted { color: var(--muted); }
+  .card { background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 1px 4px rgba(14,26,58,.08); }
+  input, select, textarea, button { font: inherit; }
+  input, select, textarea { border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #fff; }
+  textarea { width: 100%; min-height: 140px; font-family: ui-monospace, monospace; font-size: 13px; }
+  button { border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 700; cursor: pointer; background: var(--blue); color: #fff; }
+  button.ghost { background: #F1EDE2; color: var(--ink); }
+  button.danger { background: var(--red); }
+  button.sm { padding: 6px 10px; font-size: 13px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 18px; }
+  .tile { background: #fff; border-radius: 14px; padding: 14px; box-shadow: 0 1px 4px rgba(14,26,58,.08); }
+  .tile b { display: block; font: 800 28px/1.1 "Archivo", sans-serif; }
+  .tile span { color: var(--muted); font-size: 13px; }
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 14px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 14px; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: #FBF8EF; }
+  td small { color: var(--muted); display: block; }
+  .pill { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 700; }
+  .ok { background: #DDF3E4; color: #146C3A; } .warn { background: #FFE0E3; color: #8E0F1F; } .off { background: #ECECEC; color: #555; }
+  .err { color: var(--red); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Tricolor · Panel</h1>
+  <p class="muted">Números del mapa y moderación de lugares. Este dispositivo no cuenta en las estadísticas.</p>
+
+  <form class="card row" id="login">
+    <input type="password" id="key" placeholder="Clave de administración" autocomplete="current-password" style="flex:1;min-width:220px">
+    <label class="row muted" style="gap:6px"><input type="checkbox" id="remember"> Recordar aquí</label>
+    <button>Entrar</button>
+    <p class="err" id="loginErr" hidden></p>
+  </form>
+
+  <section id="app" hidden>
+    <div class="row" style="justify-content:space-between;margin-top:18px">
+      <div class="row"><button class="ghost sm" data-days="7">7 días</button><button class="ghost sm" data-days="30">30 días</button><button class="ghost sm" data-days="90">90 días</button></div>
+      <button class="ghost sm" id="logout">Salir</button>
+    </div>
+    <div class="tiles" id="tiles"></div>
+
+    <h2>Lugares</h2>
+    <div class="row" style="margin-bottom:10px">
+      <select id="show"><option value="all">Todos</option><option value="reported">Con reportes</option><option value="hidden">Ocultos</option></select>
+      <input id="find" placeholder="Buscar por nombre o ciudad" style="flex:1;min-width:200px">
+    </div>
+    <div class="tablewrap"><table><thead><tr><th>Lugar</th><th>Ciudad</th><th>Votos</th><th>Estado</th><th>Creado</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+
+    <h2>Cargar lugares en bloque</h2>
+    <div class="card">
+      <p class="muted" style="margin-top:0">Pega una lista en formato JSON. Cada lugar: name, cat (comida, productos o servicios), address, city, country (2 letras), products, note, contact. Si no pones lat y lng, el panel busca la dirección en el mapa; revisa después que el pin quedó bien con “ver mapa”.</p>
+      <textarea id="importBox" placeholder='[{"name":"Arepera …","cat":"comida","lat":4.65,"lng":-74.05,"city":"Bogotá","country":"CO","products":["harina"]}]'></textarea>
+      <div class="row" style="margin-top:10px"><button id="importBtn">Cargar</button><span id="importMsg" class="muted"></span></div>
+    </div>
+  </section>
+</main>
+<script>
+"use strict";
+try { localStorage.setItem("tricolor.notrack", "1"); } catch (e) {}
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const nf = new Intl.NumberFormat("es-CO");
+let KEY = "", DAYS = 30, PLACES = [];
+try { KEY = localStorage.getItem("tricolor.adminkey") || sessionStorage.getItem("tricolor.adminkey") || ""; } catch (e) {}
+
+async function call(body) {
+  const r = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json", "x-admin-key": KEY }, body: JSON.stringify(body) });
+  const d = await r.json();
+  if (!d.ok) throw new Error(d.reason || "error");
+  return d;
+}
+
+$("login").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  KEY = $("key").value.trim();
+  try { await load(); try { ($("remember").checked ? localStorage : sessionStorage).setItem("tricolor.adminkey", KEY); } catch (e) {} }
+  catch (e) { $("loginErr").textContent = e.message === "unauthorized" ? "Clave incorrecta." : "No se pudo conectar."; $("loginErr").hidden = false; }
+});
+$("logout").addEventListener("click", () => { try { localStorage.removeItem("tricolor.adminkey"); sessionStorage.removeItem("tricolor.adminkey"); } catch (e) {} location.reload(); });
+document.querySelectorAll("[data-days]").forEach(b => b.addEventListener("click", () => { DAYS = +b.dataset.days; load(); }));
+
+async function load() {
+  const [s, l] = await Promise.all([call({ action: "stats", days: DAYS }), call({ action: "list" })]);
+  $("login").hidden = true; $("app").hidden = false;
+  document.querySelectorAll("[data-days]").forEach(b => { b.className = "sm " + (+b.dataset.days === DAYS ? "" : "ghost"); });
+  const sum = k => s.days.reduce((a, d) => a + (d.counts[k] || 0), 0);
+  const countries = {};
+  s.days.forEach(d => Object.entries(d.counts).forEach(([k, v]) => { const m = k.match(/^visit_cc_([A-Z]{2})$/); if (m) countries[m[1]] = (countries[m[1]] || 0) + v; }));
+  const topCc = Object.entries(countries).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c, v]) => `${c} ${v}`).join(" · ") || "—";
+  const t = [
+    [l.summary.places, "Lugares en el mapa"], [l.summary.countries, "Países"], [l.summary.cities, "Ciudades"],
+    [sum("visit"), `Visitantes, ${DAYS} días`], [sum("add"), "Lugares agregados"], [sum("confirm"), "Confirmaciones"],
+    [sum("share"), "Compartidos"], [sum("nav"), "“Cómo llegar”"], [topCc, "Visitas por país"]
+  ];
+  $("tiles").innerHTML = t.map(([v, l2]) => `<div class="tile"><b>${typeof v === "number" ? nf.format(v) : esc(v)}</b><span>${esc(l2)}</span></div>`).join("");
+  PLACES = l.places; drawRows();
+}
+
+function drawRows() {
+  const mode = $("show").value, q = $("find").value.trim().toLowerCase();
+  const rows = PLACES.filter(p => mode === "all" || (mode === "reported" ? p.reports > 0 : p.hidden || p.auto))
+    .filter(p => !q || (p.name + " " + p.city).toLowerCase().includes(q));
+  $("rows").innerHTML = rows.map(p => `<tr>
+    <td><b>${esc(p.name)}</b><small>${esc(p.cat)}${p.address ? " · " + esc(p.address) : ""}</small>${p.note ? `<small>${esc(p.note)}</small>` : ""}${p.contact ? `<small>${esc(p.contact)}</small>` : ""}</td>
+    <td>${esc(p.city)} ${esc(p.country)}<small><a href="https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=17/${p.lat}/${p.lng}" target="_blank" rel="noopener">ver mapa</a></small></td>
+    <td>👍 ${p.confirms} · ⚠️ ${p.reports}</td>
+    <td>${p.hidden ? '<span class="pill off">Oculto</span>' : p.auto ? '<span class="pill warn">Oculto por reportes</span>' : '<span class="pill ok">Visible</span>'}</td>
+    <td>${new Date(p.createdAt).toLocaleDateString("es-CO")}</td>
+    <td class="row">${p.hidden || p.auto ? `<button class="sm ghost" data-a="show" data-id="${esc(p.id)}">Mostrar</button>` : `<button class="sm ghost" data-a="hide" data-id="${esc(p.id)}">Ocultar</button>`}<button class="sm danger" data-a="delete" data-id="${esc(p.id)}">Borrar</button></td>
+  </tr>`).join("") || `<tr><td colspan="6" class="muted">No hay lugares para mostrar.</td></tr>`;
+}
+$("show").addEventListener("change", drawRows);
+$("find").addEventListener("input", drawRows);
+$("rows").addEventListener("click", async ev => {
+  const b = ev.target.closest("button[data-a]"); if (!b) return;
+  if (b.dataset.a === "delete" && !confirm("¿Borrar este lugar para siempre?")) return;
+  b.disabled = true;
+  try { await call({ action: b.dataset.a, id: b.dataset.id }); await load(); } catch (e) { alert("No se pudo: " + e.message); b.disabled = false; }
+});
+// Si un lugar no trae coordenadas, se buscan con su dirección en OpenStreetMap (una consulta por segundo).
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function geocode(p) {
+  const q = [p.address, p.city].filter(Boolean).join(", ");
+  const url = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(q) + (p.country ? "&countrycodes=" + p.country.toLowerCase() : "");
+  const r = await fetch(url); const d = await r.json();
+  return d && d[0] ? { lat: +d[0].lat, lng: +d[0].lon, found: d[0].display_name } : null;
+}
+$("importBtn").addEventListener("click", async () => {
+  let list; try { list = JSON.parse($("importBox").value); } catch (e) { $("importMsg").textContent = "El texto no es un JSON válido."; return; }
+  if (!Array.isArray(list)) { $("importMsg").textContent = "Debe ser una lista: [ … ]"; return; }
+  const ready = [], failed = [];
+  $("importBtn").disabled = true;
+  for (let i = 0; i < list.length; i++) {
+    const p = list[i];
+    if (Number.isFinite(+p.lat) && Number.isFinite(+p.lng) && p.lat !== "" && p.lng !== "") { ready.push(p); continue; }
+    $("importMsg").textContent = `Ubicando ${i + 1} de ${list.length}: ${p.name}…`;
+    try { const g = await geocode(p); if (g) ready.push(Object.assign({}, p, { lat: g.lat, lng: g.lng })); else failed.push(p); } catch (e) { failed.push(p); }
+    await sleep(1100);
+  }
+  try {
+    const d = ready.length ? await call({ action: "import", places: ready }) : { added: 0 };
+    $("importMsg").innerHTML = `Listo: ${d.added} lugares cargados.` + (failed.length ? `<br><b>No se pudieron ubicar ${failed.length}:</b> ${failed.map(p => esc(p.name + " (" + (p.address || "") + ", " + (p.city || "") + ")")).join("; ")}.<br>Agrégalos a mano en el mapa con “+ Agregar”, o pon lat y lng en el texto.` : "");
+    $("importBox").value = failed.length ? JSON.stringify(failed, null, 1) : "";
+    await load();
+  } catch (e) { $("importMsg").textContent = "No se pudo cargar: " + e.message; }
+  $("importBtn").disabled = false;
+});
+
+if (KEY) load().catch(() => { KEY = ""; });
+</script>
+</body>
+</html>

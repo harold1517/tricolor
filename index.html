@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tricolor · Lo venezolano, cerca de ti</title>
+<meta name="description" content="El mapa de lo venezolano en el mundo: dónde conseguir Harina PAN, queso, malta, areperas y servicios de venezolanos en tu ciudad. Lo arma la comunidad.">
+<meta property="og:title" content="Tricolor · Lo venezolano, cerca de ti">
+<meta property="og:description" content="¿Dónde consigues Harina PAN en tu ciudad? El mapa que armamos entre todos los venezolanos.">
+<meta name="theme-color" content="#00247D">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='11' fill='%23FFCC00'/%3E%3Crect y='11' width='32' height='10' fill='%2300247D'/%3E%3Crect y='21' width='32' height='11' fill='%23CF142B'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
+<style>
+  :root {
+    --yellow: #FFCC00; --blue: #00247D; --red: #CF142B;
+    --ink: #0E1A3A; --muted: #5A6480; --line: #E6E1D3; --paper: #FFFBF1; --card: #FFFFFF;
+    --c-comida: #E8A400; --c-productos: #1F49C4; --c-servicios: #CF142B;
+    --display: "Archivo", "Arial Black", Arial, sans-serif;
+    --sheet: 42vh;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; }
+  body { font: 400 15px/1.45 "Figtree", system-ui, sans-serif; color: var(--ink); background: var(--paper); overflow: hidden; -webkit-text-size-adjust: 100%; }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  a { color: var(--blue); }
+
+  #map { position: fixed; inset: 0; z-index: 1; background: #EDE7D6; }
+  .leaflet-container { font: inherit; }
+
+  /* Barra de arriba */
+  .top { position: fixed; z-index: 10; left: 12px; right: 12px; top: calc(10px + env(safe-area-inset-top, 0px)); display: grid; gap: 8px; pointer-events: none; }
+  .top > * { pointer-events: auto; }
+  .brandbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .brand { display: inline-flex; align-items: center; gap: 9px; background: var(--card); border-radius: 14px; padding: 7px 12px 7px 9px; box-shadow: 0 2px 10px rgba(14,26,58,.14); text-decoration: none; color: var(--ink); }
+  .flag { width: 26px; height: 19px; border-radius: 4px; overflow: hidden; display: grid; grid-template-rows: 1fr 1fr 1fr; flex: none; position: relative; }
+  .flag i:nth-child(1) { background: var(--yellow); } .flag i:nth-child(2) { background: var(--blue); } .flag i:nth-child(3) { background: var(--red); }
+  .flag svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .brand b { font: 800 19px/1 var(--display); letter-spacing: -.02em; }
+  .brand small { display: block; font: 600 10.5px/1.1 "Figtree"; color: var(--muted); margin-top: 2px; }
+  .count { background: var(--card); border-radius: 12px; padding: 7px 11px; font-weight: 600; font-size: 12.5px; box-shadow: 0 2px 10px rgba(14,26,58,.14); white-space: nowrap; }
+  .count strong { color: var(--blue); }
+  .search { display: flex; gap: 8px; }
+  .search form { flex: 1; position: relative; }
+  .search input { width: 100%; height: 46px; border: 0; border-radius: 14px; padding: 0 14px 0 40px; background: var(--card); box-shadow: 0 2px 12px rgba(14,26,58,.16); font-size: 16px; }
+  .search input:focus { outline: 3px solid var(--yellow); }
+  .search .ico { position: absolute; left: 13px; top: 13px; width: 18px; height: 18px; opacity: .55; }
+  .round { width: 46px; height: 46px; border: 0; border-radius: 14px; background: var(--card); box-shadow: 0 2px 12px rgba(14,26,58,.16); display: grid; place-items: center; flex: none; }
+  .round svg { width: 21px; height: 21px; }
+  .results { background: var(--card); border-radius: 14px; box-shadow: 0 6px 22px rgba(14,26,58,.2); overflow: hidden; }
+  .results button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 11px 14px; border-top: 1px solid var(--line); }
+  .results button:first-child { border-top: 0; }
+  .results button:hover, .results button:focus { background: #FFF6D6; outline: none; }
+  .results small { display: block; color: var(--muted); font-size: 12.5px; }
+  .chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 4px; margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; border: 0; border-radius: 999px; padding: 7px 12px; background: var(--card); font-weight: 600; font-size: 13px; box-shadow: 0 1px 6px rgba(14,26,58,.14); white-space: nowrap; }
+  .chip[aria-pressed="true"] { background: var(--ink); color: #fff; }
+
+  /* Hoja de abajo con la lista */
+  .sheet { position: fixed; z-index: 9; left: 0; right: 0; bottom: 0; height: var(--sheet); background: var(--card); border-radius: 20px 20px 0 0; box-shadow: 0 -6px 24px rgba(14,26,58,.16); display: flex; flex-direction: column; transition: height .25s ease; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .sheet.tall { height: 82vh; } .sheet.low { height: 118px; }
+  .grab { border: 0; background: none; padding: 9px 0 4px; display: grid; place-items: center; flex: none; }
+  .grab i { width: 40px; height: 5px; border-radius: 3px; background: #D5CFBF; }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px 10px; flex: none; }
+  .sheet-head h2 { margin: 0; font: 800 18px/1.15 var(--display); letter-spacing: -.01em; }
+  .sheet-head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .add { border: 0; border-radius: 12px; padding: 11px 14px; background: var(--red); color: #fff; font-weight: 700; white-space: nowrap; box-shadow: 0 3px 10px rgba(207,20,43,.3); }
+  .list { overflow-y: auto; padding: 0 12px 16px; flex: 1; -webkit-overflow-scrolling: touch; }
+  .item { display: grid; grid-template-columns: 40px 1fr auto; gap: 11px; align-items: center; width: 100%; text-align: left; border: 0; background: none; padding: 11px 6px; border-top: 1px solid var(--line); }
+  .item:first-child { border-top: 0; }
+  .item:hover { background: #FFFAEA; }
+  .dot { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; }
+  .d-comida { background: #FFF1C2; } .d-productos { background: #DFE7FF; } .d-servicios { background: #FFE0E3; }
+  .item b { display: block; font-weight: 700; font-size: 15px; line-height: 1.25; }
+  .item small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .item em { font-style: normal; font-weight: 700; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+  .empty { padding: 14px 8px; color: var(--muted); }
+  .empty b { color: var(--ink); display: block; font-size: 15px; margin-bottom: 4px; }
+
+  /* Marcadores */
+  .pin { width: 34px; height: 34px; border-radius: 50% 50% 50% 4px; transform: rotate(-45deg); display: grid; place-items: center; border: 2.5px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+  .pin span { transform: rotate(45deg); font-size: 16px; line-height: 1; }
+  .p-comida { background: var(--yellow); } .p-productos { background: var(--c-productos); } .p-servicios { background: var(--red); }
+  .marker-cluster { background: rgba(0,36,125,.22); border-radius: 50%; }
+  .marker-cluster div { width: 32px; height: 32px; margin: 4px; border-radius: 50%; background: var(--blue); color: #fff; font: 800 13px/32px "Figtree", sans-serif; text-align: center; box-shadow: 0 0 0 2px #fff; }
+
+  /* Ficha del lugar y formularios: panel que sube */
+  .panel { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; max-height: 88vh; overflow-y: auto; background: var(--card); border-radius: 20px 20px 0 0; box-shadow: 0 -8px 30px rgba(14,26,58,.25); padding: 8px 18px calc(18px + env(safe-area-inset-bottom, 0px)); }
+  .panel .x { position: absolute; right: 12px; top: 12px; width: 36px; height: 36px; border: 0; border-radius: 50%; background: #F3EFE4; font-size: 18px; line-height: 1; }
+  .panel h2 { margin: 18px 44px 4px 0; font: 800 23px/1.12 var(--display); letter-spacing: -.015em; }
+  .panel h3 { margin: 18px 0 8px; font-size: 14px; }
+  .tag { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 4px 10px; font-weight: 700; font-size: 12.5px; }
+  .t-comida { background: #FFF1C2; color: #6B4B00; } .t-productos { background: #DFE7FF; color: #102D85; } .t-servicios { background: #FFE0E3; color: #8E0F1F; }
+  .meta { color: var(--muted); font-size: 13.5px; margin: 8px 0 0; }
+  .prods { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .prods span { background: #F3EFE4; border-radius: 8px; padding: 4px 9px; font-size: 13px; font-weight: 600; }
+  .note { margin: 12px 0 0; background: #FFFAEA; border-left: 3px solid var(--yellow); padding: 9px 12px; border-radius: 0 10px 10px 0; }
+  .trust { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13.5px; font-weight: 600; color: #146C3A; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 46px; border-radius: 12px; border: 0; padding: 10px 14px; font-weight: 700; text-decoration: none; text-align: center; }
+  .b-blue { background: var(--blue); color: #fff; } .b-yellow { background: var(--yellow); color: var(--ink); } .b-ghost { background: #F3EFE4; color: var(--ink); } .b-red { background: var(--red); color: #fff; }
+  .wide { grid-column: 1 / -1; }
+  .linkbtn { border: 0; background: none; color: var(--muted); text-decoration: underline; padding: 12px 0 0; font-size: 13.5px; }
+  .disclaim { color: var(--muted); font-size: 12px; margin-top: 14px; }
+
+  /* Agregar: mira en el centro del mapa */
+  .aim { position: fixed; z-index: 15; left: 50%; top: 50%; transform: translate(-50%, -100%); pointer-events: none; }
+  .aim .pin { width: 44px; height: 44px; background: var(--red); }
+  .aim .pin span { font-size: 20px; }
+  .aimbar { position: fixed; z-index: 16; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); background: var(--card); border-radius: 18px; box-shadow: 0 6px 24px rgba(14,26,58,.25); padding: 14px; display: grid; gap: 10px; }
+  .aimbar p { margin: 0; font-weight: 600; }
+  .aimbar .row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; }
+  form.addf { display: grid; gap: 14px; margin-top: 10px; }
+  label.f { display: grid; gap: 6px; font-weight: 700; font-size: 14px; }
+  label.f small { font-weight: 400; color: var(--muted); }
+  .f input, .f textarea { width: 100%; border: 1.5px solid var(--line); border-radius: 12px; padding: 12px; background: #fff; font-size: 16px; }
+  .f textarea { min-height: 76px; resize: vertical; }
+  .f input:focus, .f textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(0,36,125,.15); }
+  .cats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .cats label, .pchips label { position: relative; }
+  .cats input, .pchips input { position: absolute; opacity: 0; pointer-events: none; }
+  .cats span { display: grid; place-items: center; gap: 2px; text-align: center; border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 4px; font-weight: 700; font-size: 13px; min-height: 70px; }
+  .cats span i { font-style: normal; font-size: 22px; }
+  .cats input:checked + span { border-color: var(--blue); background: #EEF2FF; box-shadow: 0 0 0 2px var(--blue) inset; }
+  .pchips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pchips span { display: inline-block; border: 1.5px solid var(--line); border-radius: 999px; padding: 6px 11px; font-weight: 600; font-size: 13.5px; }
+  .pchips input:checked + span { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .cats input:focus-visible + span, .pchips input:focus-visible + span { outline: 3px solid var(--yellow); }
+  .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  .err { color: var(--red); font-weight: 600; margin: 0; }
+  .done { text-align: center; padding: 10px 0 4px; }
+  .done .big { font-size: 46px; }
+
+  .toast { position: fixed; z-index: 40; left: 50%; top: calc(150px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 12px; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,.25); max-width: calc(100vw - 32px); text-align: center; }
+  .welcome { position: fixed; z-index: 30; inset: 0; background: rgba(14,26,58,.45); display: grid; place-items: end center; }
+  .welcome .card { width: 100%; max-width: 520px; background: var(--card); border-radius: 22px 22px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom, 0px)); }
+  .stripe { display: grid; grid-template-columns: 1fr; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 16px; background: linear-gradient(90deg, var(--yellow) 0 33.3%, var(--blue) 33.3% 66.6%, var(--red) 66.6%); }
+  .welcome h1 { margin: 0; font: 800 30px/1.02 var(--display); letter-spacing: -.025em; }
+  .welcome p { color: var(--muted); margin: 10px 0 18px; font-size: 15.5px; }
+  .welcome .actions { margin-top: 0; }
+
+  @media (min-width: 900px) {
+    .top { left: 16px; right: auto; width: 380px; }
+    .sheet, .sheet.tall, .sheet.low { left: 16px; right: auto; width: 380px; top: 196px; bottom: 16px; height: auto; border-radius: 18px; }
+    .grab { display: none; }
+    .panel { left: auto; right: 16px; top: 16px; bottom: auto; width: 400px; max-height: calc(100vh - 32px); border-radius: 18px; }
+    .aimbar { left: 50%; right: auto; width: 440px; transform: translateX(-50%); }
+    .toast { top: auto; bottom: 24px; }
+    .welcome { place-items: center; }
+    .welcome .card { border-radius: 22px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .sheet { transition: none; } }
+</style>
+</head>
+<body>
+
+<div id="map" role="region" aria-label="Mapa de lugares venezolanos"></div>
+
+<div class="top">
+  <div class="brandbar">
+    <a class="brand" href="./" aria-label="Tricolor, inicio">
+      <span class="flag" aria-hidden="true"><i></i><i></i><i></i>
+        <svg viewBox="0 0 26 19"><g fill="#fff">
+          <circle cx="7.2" cy="10.6" r=".9"/><circle cx="8.6" cy="8.7" r=".9"/><circle cx="10.5" cy="7.5" r=".9"/><circle cx="12.4" cy="7.1" r=".9"/>
+          <circle cx="13.6" cy="7.1" r=".9"/><circle cx="15.5" cy="7.5" r=".9"/><circle cx="17.4" cy="8.7" r=".9"/><circle cx="18.8" cy="10.6" r=".9"/></g></svg>
+      </span>
+      <span><b>tricolor</b><small>Lo venezolano, cerca de ti</small></span>
+    </a>
+    <span class="count" id="count" hidden></span>
+  </div>
+  <div class="search">
+    <form id="searchForm" role="search">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Busca tu ciudad: Lima, Madrid, Bogotá…" autocomplete="off" enterkeyhint="search" aria-label="Buscar ciudad">
+    </form>
+    <button class="round" id="nearBtn" type="button" aria-label="Lo que hay cerca de mí" title="Cerca de mí">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#00247D" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </button>
+  </div>
+  <div class="results" id="results" hidden></div>
+  <div class="chips" id="chips" role="group" aria-label="Filtrar"></div>
+</div>
+
+<section class="sheet" id="sheet" aria-label="Lugares en esta zona">
+  <button class="grab" id="grab" type="button" aria-label="Agrandar o achicar la lista"><i></i></button>
+  <div class="sheet-head">
+    <div><h2 id="listTitle">Lugares en esta zona</h2><p id="listSub"></p></div>
+    <button class="add" id="addBtn" type="button">+ Agregar</button>
+  </div>
+  <div class="list" id="list"></div>
+</section>
+
+<section class="panel" id="panel" hidden role="dialog" aria-modal="false"></section>
+
+<div class="aim" id="aim" hidden aria-hidden="true"><div class="pin"><span>📍</span></div></div>
+<div class="aimbar" id="aimbar" hidden>
+  <p>Mueve el mapa hasta que el pin quede justo en el lugar.</p>
+  <div class="row"><button class="btn b-ghost" id="aimCancel" type="button">Cancelar</button><button class="btn b-blue" id="aimOk" type="button">Aquí es</button></div>
+</div>
+
+<div class="welcome" id="welcome" hidden>
+  <div class="card" role="dialog" aria-labelledby="wTitle">
+    <div class="stripe" aria-hidden="true"></div>
+    <h1 id="wTitle">¿Dónde consigues Harina PAN en tu ciudad?</h1>
+    <p>Tricolor es el mapa de lo venezolano en el mundo: productos, areperas y servicios de venezolanos. Lo armamos entre todos, y es gratis.</p>
+    <div class="actions">
+      <button class="btn b-yellow" id="wNear" type="button">📍 Ver cerca de mí</button>
+      <button class="btn b-ghost" id="wSearch" type="button">Buscar mi ciudad</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<script>
+"use strict";
+const API = "/api";
+const SITE = location.origin;
+const CATS = {
+  comida: { label: "Sabor a casa", icon: "🫓", hint: "Areperas, panaderías, restaurantes" },
+  productos: { label: "Productos", icon: "🛒", hint: "Tiendas con productos venezolanos" },
+  servicios: { label: "Servicios", icon: "✂️", hint: "Barberos, gestores, envíos…" }
+};
+const PRODUCTS = {
+  harina: "Harina PAN", queso: "Queso llanero o de mano", malta: "Malta", toddy: "Toddy",
+  dulces: "Pirulín, Cocosette, Susy…", diablitos: "Diablitos", nata: "Nata", cafe: "Café venezolano",
+  panaderia: "Pan de jamón, cachitos", hallacas: "Hallacas"
+};
+const COUNTRY_NAMES = (() => { try { return new Intl.DisplayNames(["es"], { type: "region" }); } catch (e) { return null; } })();
+const countryName = cc => (cc && COUNTRY_NAMES ? COUNTRY_NAMES.of(cc) : cc) || "";
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const params = new URLSearchParams(location.search);
+
+/* ---------- Guardado local (con respaldo si el navegador no deja) ---------- */
+const mem = {};
+const keep = {
+  get(k) { try { return localStorage.getItem("tricolor." + k) ?? mem[k] ?? ""; } catch (e) { return mem[k] ?? ""; } },
+  set(k, v) { mem[k] = v; try { localStorage.setItem("tricolor." + k, v); } catch (e) {} }
+};
+function deviceId() {
+  let id = keep.get("device");
+  if (!/^[a-f0-9]{32}$/.test(id)) {
+    const b = new Uint8Array(16); crypto.getRandomValues(b);
+    id = Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
+    keep.set("device", id);
+  }
+  return id;
+}
+
+/* ---------- Medición: una vez por evento al día por dispositivo, sin datos personales ---------- */
+const ch = (params.get("c") || "").toLowerCase();
+if (/^[a-z0-9]{1,12}$/.test(ch)) keep.set("ch", ch);
+function track(e, extra) {
+  try {
+    if (keep.get("notrack")) return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (keep.get("t." + e) === today) return;
+    keep.set("t." + e, today);
+    const body = JSON.stringify(Object.assign({ e, ch: keep.get("ch") }, extra || {}));
+    if (navigator.sendBeacon) navigator.sendBeacon(API + "/track", new Blob([body], { type: "application/json" }));
+    else fetch(API + "/track", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+  } catch (e2) {}
+}
+
+/* ---------- Dónde empezar: según la zona horaria del teléfono ---------- */
+const TZ_START = {
+  "America/Bogota": [4.65, -74.08, 11], "America/Caracas": [10.49, -66.88, 11], "America/Lima": [-12.06, -77.04, 11],
+  "America/Santiago": [-33.45, -70.66, 11], "America/Argentina/Buenos_Aires": [-34.6, -58.42, 11], "America/Guayaquil": [-0.18, -78.47, 11],
+  "America/Panama": [8.98, -79.52, 12], "America/Mexico_City": [19.43, -99.13, 11], "America/Santo_Domingo": [18.48, -69.93, 12],
+  "America/Montevideo": [-34.9, -56.16, 12], "America/Sao_Paulo": [-23.55, -46.63, 11], "America/Costa_Rica": [9.93, -84.08, 12],
+  "America/New_York": [25.77, -80.2, 10], "America/Chicago": [29.76, -95.37, 10], "America/Los_Angeles": [34.05, -118.24, 10],
+  "America/Toronto": [43.65, -79.38, 11], "Europe/Madrid": [40.42, -3.7, 11], "Europe/Lisbon": [38.72, -9.14, 12],
+  "Europe/Rome": [41.9, 12.5, 11], "Europe/London": [51.51, -0.13, 11], "Europe/Paris": [48.86, 2.35, 11], "Europe/Berlin": [52.52, 13.4, 11]
+};
+function startView() {
+  try { const v = JSON.parse(keep.get("view") || "null"); if (v && Number.isFinite(v[0])) return v; } catch (e) {}
+  let tz = ""; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {}
+  return TZ_START[tz] || [15, -40, 3];
+}
+
+/* ---------- Mapa ---------- */
+const map = L.map("map", { zoomControl: false, worldCopyJump: true, minZoom: 2 }).setView(startView().slice(0, 2), startView()[2]);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, subdomains: "abc", attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+}).addTo(map);
+const cluster = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 46, iconCreateFunction: c => L.divIcon({ html: `<div>${c.getChildCount()}</div>`, className: "marker-cluster", iconSize: [40, 40] }) });
+map.addLayer(cluster);
+const pinIcon = cat => L.divIcon({ className: "", html: `<div class="pin p-${cat}"><span>${CATS[cat].icon}</span></div>`, iconSize: [34, 34], iconAnchor: [17, 41] });
+
+let PLACES = [];
+let filter = "all";      // "all", una categoría o "p:producto"
+let openId = null;
+
+function matches(p) {
+  if (filter === "all") return true;
+  if (filter.startsWith("p:")) return p.products.includes(filter.slice(2));
+  return p.cat === filter;
+}
+function drawMarkers() {
+  cluster.clearLayers();
+  PLACES.filter(matches).forEach(p => {
+    const m = L.marker([p.lat, p.lng], { icon: pinIcon(p.cat), title: p.name, keyboard: true });
+    m.on("click", () => openPlace(p.id));
+    cluster.addLayer(m);
+  });
+}
+function km(a, b) {
+  const R = 6371, r = x => x * Math.PI / 180;
+  const dLat = r(b.lat - a.lat), dLng = r(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const fmtKm = d => d < 1 ? Math.round(d * 1000 / 10) * 10 + " m" : d < 10 ? d.toFixed(1).replace(".", ",") + " km" : Math.round(d) + " km";
+let myPos = null;
+
+function drawList() {
+  const b = map.getBounds(), c = map.getCenter();
+  const ref = myPos || { lat: c.lat, lng: c.lng };
+  const inView = PLACES.filter(p => matches(p) && b.contains([p.lat, p.lng]))
+    .map(p => ({ p, d: km(ref, p) })).sort((x, y) => x.d - y.d).slice(0, 80);
+  $("listTitle").textContent = inView.length ? `${inView.length} ${inView.length === 1 ? "lugar" : "lugares"} en esta zona` : "Nada por aquí todavía";
+  $("listSub").textContent = filter === "all" ? "Toca uno para ver detalles" : "Filtrado: " + filterLabel(filter);
+  if (!inView.length) {
+    $("list").innerHTML = `<div class="empty"><b>Sé la primera persona en marcar un lugar aquí 🇻🇪</b>¿Conoces dónde venden Harina PAN, una arepera o un barbero venezolano? Agrégalo en 30 segundos y ayudas a otros paisanos.</div>`;
+    return;
+  }
+  $("list").innerHTML = inView.map(({ p, d }) => `
+    <button class="item" type="button" data-id="${esc(p.id)}">
+      <span class="dot d-${p.cat}" aria-hidden="true">${CATS[p.cat].icon}</span>
+      <span><b>${esc(p.name)}</b><small>${esc(p.products.length ? p.products.slice(0, 3).map(x => PRODUCTS[x]).join(" · ") : CATS[p.cat].label)}${p.city ? " · " + esc(p.city) : ""}</small></span>
+      <em>${fmtKm(d)}</em>
+    </button>`).join("");
+}
+$("list").addEventListener("click", ev => { const t = ev.target.closest(".item"); if (t) openPlace(t.dataset.id, true); });
+
+function drawCount() {
+  if (!PLACES.length) return;
+  const cc = new Set(PLACES.map(p => p.country).filter(Boolean)).size;
+  $("count").innerHTML = `<strong>${PLACES.length}</strong> lugares${cc > 1 ? ` · <strong>${cc}</strong> países` : ""}`;
+  $("count").hidden = false;
+}
+function filterLabel(f) { return f.startsWith("p:") ? PRODUCTS[f.slice(2)] : CATS[f]?.label || "Todo"; }
+function drawChips() {
+  const opts = [["all", "Todo"], ["comida", "🫓 Sabor a casa"], ["productos", "🛒 Productos"], ["servicios", "✂️ Servicios"],
+    ["p:harina", "Harina PAN"], ["p:queso", "Queso"], ["p:malta", "Malta"], ["p:dulces", "Chucherías"], ["p:panaderia", "Pan de jamón"]];
+  $("chips").innerHTML = opts.map(([v, l]) => `<button class="chip" type="button" data-f="${v}" aria-pressed="${v === filter}">${esc(l)}</button>`).join("");
+}
+$("chips").addEventListener("click", ev => {
+  const t = ev.target.closest(".chip"); if (!t) return;
+  filter = t.dataset.f; drawChips(); drawMarkers(); drawList();
+});
+
+let moveTimer = 0;
+map.on("moveend", () => {
+  clearTimeout(moveTimer);
+  moveTimer = setTimeout(() => { drawList(); const c = map.getCenter(); keep.set("view", JSON.stringify([+c.lat.toFixed(4), +c.lng.toFixed(4), map.getZoom()])); }, 120);
+});
+
+async function loadPlaces() {
+  try {
+    const r = await fetch(API + "/places", { headers: { Accept: "application/json" } });
+    const d = await r.json();
+    if (d.ok) PLACES = d.places;
+  } catch (e) { toast("No pudimos cargar el mapa. Revisa tu conexión."); }
+  drawMarkers(); drawList(); drawCount();
+  const deep = params.get("p");
+  if (deep) { const p = PLACES.find(x => x.id === deep); if (p) { map.setView([p.lat, p.lng], 16); openPlace(p.id); } }
+}
+
+/* ---------- Ficha del lugar ---------- */
+function ago(iso) {
+  const d = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86400000));
+  return d === 0 ? "hoy" : d === 1 ? "ayer" : d < 30 ? `hace ${d} días` : d < 60 ? "hace un mes" : `hace ${Math.round(d / 30)} meses`;
+}
+function contactLink(c) {
+  if (!c) return "";
+  const s = c.trim();
+  if (/^@?[A-Za-z0-9._]{2,30}$/.test(s) && !/^\d+$/.test(s.replace("@", ""))) {
+    const u = s.replace(/^@/, "");
+    return `<a class="btn b-ghost" href="https://instagram.com/${encodeURIComponent(u)}" target="_blank" rel="noopener nofollow">Instagram @${esc(u)}</a>`;
+  }
+  const digits = s.replace(/[^\d]/g, "");
+  if (digits.length >= 8 && digits.length <= 15) return `<a class="btn b-ghost" href="https://wa.me/${digits}" target="_blank" rel="noopener nofollow">WhatsApp</a>`;
+  return `<p class="meta">Contacto: ${esc(s)}</p>`;
+}
+const voted = id => keep.get("v." + id);
+
+function openPlace(id, fly) {
+  const p = PLACES.find(x => x.id === id); if (!p) return;
+  openId = id;
+  if (fly) map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 15), { duration: .5 });
+  const where = [p.address, p.city, countryName(p.country)].filter(Boolean).join(" · ");
+  const v = voted(id);
+  $("panel").innerHTML = `
+    <button class="x" type="button" data-close aria-label="Cerrar">✕</button>
+    <h2>${esc(p.name)}</h2>
+    <span class="tag t-${p.cat}">${CATS[p.cat].icon} ${CATS[p.cat].label}</span>
+    ${where ? `<p class="meta">${esc(where)}</p>` : ""}
+    ${p.products.length ? `<div class="prods">${p.products.map(x => `<span>${esc(PRODUCTS[x])}</span>`).join("")}</div>` : ""}
+    ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
+    ${p.confirms > 0 ? `<p class="trust">✓ Confirmado por ${p.confirms} ${p.confirms === 1 ? "persona" : "personas"} · ${ago(p.lastConfirm)}</p>` : `<p class="trust" style="color:var(--muted)">Aún nadie lo ha confirmado. ¿Lo conoces? Cuéntanos si sigue ahí 👇</p>`}
+    <div class="actions">
+      <a class="btn b-blue" id="navBtn" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" rel="noopener">Cómo llegar</a>
+      <button class="btn b-yellow" type="button" id="shareBtn">Compartir</button>
+      ${contactLink(p.contact).replace('class="btn', 'class="wide btn')}
+      ${v ? `<p class="meta wide">Gracias, ya nos contaste de este lugar.</p>` :
+        `<button class="btn b-ghost" type="button" id="okBtn">👍 Sigue ahí</button><button class="btn b-ghost" type="button" id="badBtn">Ya no está</button>`}
+    </div>
+    <p class="disclaim">La información la comparte la comunidad. Confirma horarios y precios antes de ir.</p>`;
+  $("panel").hidden = false;
+  $("panel").scrollTop = 0;
+  track("open");
+  $("navBtn").addEventListener("click", () => track("nav"));
+  $("shareBtn").addEventListener("click", () => sharePlace(p));
+  if (!v) {
+    $("okBtn").addEventListener("click", () => vote(p, "confirm"));
+    $("badBtn").addEventListener("click", () => { if (confirm("¿Seguro que este lugar ya no existe o ya no tiene lo que dice?")) vote(p, "report"); });
+  }
+}
+function closePanel() { $("panel").hidden = true; openId = null; }
+$("panel").addEventListener("click", ev => { if (ev.target.closest("[data-close]")) closePanel(); });
+document.addEventListener("keydown", ev => { if (ev.key === "Escape") { if (!$("aimbar").hidden) endAim(); else if (!$("panel").hidden) closePanel(); } });
+
+async function vote(p, action) {
+  try {
+    const r = await fetch(API + "/places", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, id: p.id, device: deviceId() }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.reason);
+    keep.set("v." + p.id, action);
+    if (d.place) Object.assign(p, d.place);
+    if (d.hiddenNow) { PLACES = PLACES.filter(x => x.id !== p.id); drawMarkers(); drawList(); drawCount(); closePanel(); }
+    else openPlace(p.id);
+    toast(action === "confirm" ? "¡Gracias! Así los demás saben que sigue ahí 🙌" : "Gracias por avisar. Lo revisaremos.");
+  } catch (e) { toast(e.message === "limit" ? "Muchas acciones por hoy. Intenta mañana." : "No se pudo enviar. Intenta de nuevo."); }
+}
+
+async function sharePlace(p) {
+  const url = `${SITE}/?p=${encodeURIComponent(p.id)}&c=share`;
+  const what = p.products.length ? PRODUCTS[p.products[0]] : p.name;
+  const text = `🇻🇪 Encontré ${what} en ${p.name}${p.city ? ", " + p.city : ""}. Míralo en Tricolor, el mapa de lo venezolano en el mundo:`;
+  track("share");
+  try {
+    if (navigator.share) { await navigator.share({ title: "Tricolor", text, url }); return; }
+  } catch (e) { if (e && e.name === "AbortError") return; }
+  try { await navigator.clipboard.writeText(text + " " + url); toast("Enlace copiado. Pégalo en WhatsApp 😉"); }
+  catch (e) { window.open("https://wa.me/?text=" + encodeURIComponent(text + " " + url), "_blank", "noopener"); }
+}
+
+/* ---------- Buscar ciudad (OpenStreetMap) ---------- */
+let searchTimer = 0, searchCtrl = null;
+async function geoSearch(q) {
+  if (searchCtrl) searchCtrl.abort();
+  searchCtrl = new AbortController();
+  const url = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=es&q=" + encodeURIComponent(q);
+  const r = await fetch(url, { signal: searchCtrl.signal });
+  return r.json();
+}
+$("q").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  const q = $("q").value.trim();
+  if (q.length < 3) { $("results").hidden = true; return; }
+  searchTimer = setTimeout(async () => {
+    try {
+      const res = await geoSearch(q);
+      if (!res.length) { $("results").innerHTML = `<button type="button" disabled>No encontramos ese lugar</button>`; $("results").hidden = false; return; }
+      $("results").innerHTML = res.map((x, i) => {
+        const parts = x.display_name.split(", ");
+        return `<button type="button" data-i="${i}">${esc(parts[0])}<small>${esc(parts.slice(1, 4).join(", "))}</small></button>`;
+      }).join("");
+      $("results").hidden = false;
+      $("results").onclick = ev => {
+        const t = ev.target.closest("button[data-i]"); if (!t) return;
+        const x = res[+t.dataset.i];
+        if (x.boundingbox) map.fitBounds([[+x.boundingbox[0], +x.boundingbox[2]], [+x.boundingbox[1], +x.boundingbox[3]]], { maxZoom: 14 });
+        else map.setView([+x.lat, +x.lon], 13);
+        $("results").hidden = true; $("q").value = x.display_name.split(", ")[0]; $("q").blur();
+        track("search");
+      };
+    } catch (e) {}
+  }, 450);
+});
+$("searchForm").addEventListener("submit", ev => { ev.preventDefault(); const b = $("results").querySelector("button[data-i]"); if (b) b.click(); });
+document.addEventListener("click", ev => { if (!ev.target.closest(".search") && !ev.target.closest("#results")) $("results").hidden = true; });
+
+/* ---------- Cerca de mí ---------- */
+let meMarker = null;
+function locate(after) {
+  if (!navigator.geolocation) { toast("Tu teléfono no permite ubicarte. Busca tu ciudad arriba."); return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    map.setView([myPos.lat, myPos.lng], 14);
+    if (meMarker) meMarker.remove();
+    meMarker = L.circleMarker([myPos.lat, myPos.lng], { radius: 8, color: "#fff", weight: 3, fillColor: "#00247D", fillOpacity: 1 }).addTo(map);
+    track("near");
+    if (after) after();
+  }, () => toast("No pudimos ubicarte. Busca tu ciudad arriba 👆"), { enableHighAccuracy: false, timeout: 9000, maximumAge: 300000 });
+}
+$("nearBtn").addEventListener("click", () => locate());
+
+/* ---------- Hoja de abajo: tocar para agrandar o achicar ---------- */
+$("grab").addEventListener("click", () => {
+  const s = $("sheet");
+  if (s.classList.contains("low")) s.classList.remove("low");
+  else if (s.classList.contains("tall")) { s.classList.remove("tall"); s.classList.add("low"); }
+  else s.classList.add("tall");
+});
+
+/* ---------- Agregar un lugar ---------- */
+function startAim() {
+  closePanel();
+  $("sheet").hidden = true; $("aim").hidden = false; $("aimbar").hidden = false;
+  if (map.getZoom() < 15) map.setZoom(15);
+  track("addstart");
+}
+function endAim() { $("aim").hidden = true; $("aimbar").hidden = true; $("sheet").hidden = false; }
+$("addBtn").addEventListener("click", () => { if (map.getZoom() < 5) locate(startAim); else startAim(); });
+$("aimCancel").addEventListener("click", endAim);
+$("aimOk").addEventListener("click", () => {
+  const c = map.getCenter(); $("aim").hidden = true; $("aimbar").hidden = true;
+  showAddForm(c.lat, c.lng);
+});
+
+async function reverse(lat, lng) {
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=12&accept-language=es&lat=${lat}&lon=${lng}`);
+    const d = await r.json(); const a = d.address || {};
+    return { city: a.city || a.town || a.village || a.municipality || a.county || a.state || "", country: (a.country_code || "").toUpperCase() };
+  } catch (e) { return { city: "", country: "" }; }
+}
+
+function showAddForm(lat, lng) {
+  const cityP = reverse(lat, lng);
+  $("panel").innerHTML = `
+    <button class="x" type="button" id="addClose" aria-label="Cerrar">✕</button>
+    <h2>Agregar un lugar</h2>
+    <p class="meta">Solo lo que tú conoces de verdad. Así el mapa sirve para todos.</p>
+    <form class="addf" id="addForm" novalidate>
+      <label class="f">Nombre del lugar<input name="name" maxlength="60" required placeholder="Ej.: Arepera La Caraqueña" autocomplete="off"></label>
+      <div class="f" role="radiogroup" aria-label="Tipo de lugar"><b style="font-size:14px">¿Qué es?</b>
+        <div class="cats">${Object.entries(CATS).map(([k, c]) => `<label><input type="radio" name="cat" value="${k}"><span><i>${c.icon}</i>${c.label}</span></label>`).join("")}</div>
+      </div>
+      <div class="f"><b style="font-size:14px">¿Qué consigues ahí? <small>(opcional, marca varios)</small></b>
+        <div class="pchips">${Object.entries(PRODUCTS).map(([k, l]) => `<label><input type="checkbox" name="products" value="${k}"><span>${esc(l)}</span></label>`).join("")}</div>
+      </div>
+      <label class="f">Dirección o referencia <small>(opcional)</small><input name="address" maxlength="100" placeholder="Ej.: Calle 45 #12-30, frente al parque" autocomplete="off"></label>
+      <label class="f">Algo útil <small>(precio, horario, qué pedir)</small><textarea name="note" maxlength="160" placeholder="Ej.: La Harina PAN a 9.500 pesos. Abren hasta las 8 p. m."></textarea></label>
+      <label class="f">Instagram o WhatsApp del negocio <small>(opcional)</small><input name="contact" maxlength="40" placeholder="@arepera o +57 300 000 0000" autocomplete="off"></label>
+      <label class="hp" aria-hidden="true">No llenar<input name="website" tabindex="-1" autocomplete="off"></label>
+      <p class="err" id="addErr" hidden></p>
+      <button class="btn b-red" type="submit" id="addSend">Publicar en el mapa</button>
+      <p class="disclaim">No publiques datos personales de nadie. Solo negocios y lugares públicos.</p>
+    </form>`;
+  $("panel").hidden = false; $("panel").scrollTop = 0;
+  const close = () => { closePanel(); $("sheet").hidden = false; };
+  $("addClose").addEventListener("click", close);
+  $("addForm").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const f = ev.target, err = $("addErr");
+    const data = {
+      action: "add", device: deviceId(), lat, lng,
+      name: f.name.value.trim(), cat: (f.querySelector('input[name="cat"]:checked') || {}).value || "",
+      products: [...f.querySelectorAll('input[name="products"]:checked')].map(x => x.value),
+      address: f.address.value.trim(), note: f.note.value.trim(), contact: f.contact.value.trim(), website: f.website.value
+    };
+    const fail = m => { err.textContent = m; err.hidden = false; };
+    err.hidden = true;
+    if (data.name.length < 2) return fail("Escribe el nombre del lugar.");
+    if (!data.cat) return fail("Elige qué es: Sabor a casa, Productos o Servicios.");
+    $("addSend").disabled = true; $("addSend").textContent = "Publicando…";
+    Object.assign(data, await cityP);
+    try {
+      const r = await fetch(API + "/places", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.reason);
+      if (d.place) { PLACES.push(d.place); keep.set("v." + d.place.id, "confirm"); drawMarkers(); drawList(); drawCount(); }
+      showThanks(d.place);
+    } catch (e) {
+      const m = { limit: "Ya agregaste varios lugares hoy. ¡Gracias! Sigue mañana.", link: "Quita los enlaces web del texto, por favor.", name: "Escribe el nombre del lugar." }[e.message];
+      fail(m || "No se pudo publicar. Revisa tu conexión e intenta de nuevo.");
+      $("addSend").disabled = false; $("addSend").textContent = "Publicar en el mapa";
+    }
+  });
+  setTimeout(() => { try { $("addForm").name.focus(); } catch (e) {} }, 150);
+}
+function showThanks(p) {
+  $("panel").innerHTML = `<div class="done"><div class="big">🇻🇪</div><h2 style="margin:6px 0 6px">¡Ya está en el mapa!</h2>
+    <p class="meta">Gracias por ayudar a otros venezolanos a sentirse en casa.</p>
+    <div class="actions"><button class="btn b-yellow wide" type="button" id="tShare">Cuéntale a tus panas</button>
+    <button class="btn b-ghost wide" type="button" id="tClose">Volver al mapa</button></div></div>`;
+  $("tShare").addEventListener("click", () => p && sharePlace(p));
+  $("tClose").addEventListener("click", () => { closePanel(); $("sheet").hidden = false; });
+}
+
+/* ---------- Avisos ---------- */
+let toastTimer = 0;
+function toast(m) { $("toast").textContent = m; $("toast").hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { $("toast").hidden = true; }, 3200); }
+
+/* ---------- Bienvenida, solo la primera vez ---------- */
+if (!keep.get("seen") && !params.get("p")) {
+  $("welcome").hidden = false;
+  const done = () => { keep.set("seen", "1"); $("welcome").hidden = true; };
+  $("wNear").addEventListener("click", () => { done(); locate(); });
+  $("wSearch").addEventListener("click", () => { done(); $("q").focus(); });
+}
+
+let region = ""; try { region = new Intl.Locale(navigator.language).region || ""; } catch (e) {}
+track("visit", /^[A-Z]{2}$/.test(region) ? { cc: region } : {});
+drawChips();
+loadPlaces();
+</script>
+</body>
+</html>
